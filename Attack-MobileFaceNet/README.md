@@ -23,8 +23,8 @@ It will show sticker placement with default parameters. Change parameters until 
 image looks like a prepared image with the sticker. You can see the parameters using `--help`
 flag.
 
-4. Download TensorFlow ArcFace model 
-[here](https://drive.google.com/file/d/1fb70KgMRSmaEUF5cJ67BCD_DmTPCR5uJ/view?usp=sharing).
+4. Download TensorFlow MobileFaceNet model 
+[here](https://github.com/sirius-ai/MobileFaceNet_TF/tree/master/arch/pretrained_model/).
 
 5. Launch an attack preparation:
 
