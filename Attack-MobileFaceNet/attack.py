@@ -16,9 +16,9 @@ import matplotlib.pyplot as plt
 # Prepare image to network input format
 def prep(im):
     if len(im.shape)==3:
-        return np.transpose(im,[2,0,1]).reshape((1,3,112,112))*2-1
+        return im.reshape((1,112,112,3))*2-1
     elif len(im.shape)==4:
-        return np.transpose(im,[0,3,1,2]).reshape((im.shape[0],3,112,112))*2-1
+        return im.reshape((im.shape[0],112,112,3))*2-1
 
 def main(args):
         print(args)
@@ -37,8 +37,8 @@ def main(args):
         face_input = tf.placeholder(tf.float32,shape=[None,600,600,3],name='face_input')
         theta = tf.placeholder(tf.float32,shape=[None,6],name='theta_input')
         prepared = stn(result,theta)
-		
-		# Transformation to ArcFace template
+        
+        # Transformation to ArcFace template
         theta2 = tf.placeholder(tf.float32,shape=[None,6],name='theta2_input')
         united = prepared[:,300:,150:750]*mask_input[:,300:,150:750]+\
                                         face_input*(1-mask_input[:,300:,150:750])
@@ -127,26 +127,27 @@ def main(args):
                                           input_map=None,
                                           return_elements=None,
                                           name="")
-        image_input = tf.get_default_graph().get_tensor_by_name('image_input:0')
-        keep_prob = tf.get_default_graph().get_tensor_by_name('keep_prob:0')
-        is_train = tf.get_default_graph().get_tensor_by_name('training_mode:0')
-        embedding = tf.get_default_graph().get_tensor_by_name('embedding:0')
-
-        orig_emb = tf.placeholder(tf.float32,shape=[None,512],name='orig_emb_input')
+        image_input = tf.get_default_graph().get_tensor_by_name('input:0')
+        embedding = tf.get_default_graph().get_tensor_by_name('embeddings:0')
+        phase_train_placeholder = tf.placeholder_with_default(tf.constant(False, dtype=tf.bool), shape=None, name='phase_train')
+        
+        orig_emb = tf.placeholder(tf.float32,shape=[None,128],name='orig_emb_input')
         cos_loss = tf.reduce_sum(tf.multiply(embedding,orig_emb),axis=1)
         grads2 = tf.gradients(cos_loss,image_input)
 
-        fdict2 = {keep_prob:1.0,is_train:False}
+        fdict2 = {phase_train_placeholder: False}
         
         # Anchor embedding calculation
         if args.anchor_face!=None:
+                print(io.imread(args.anchor_face).shape)
                 anch_im = rescale(io.imread(args.anchor_face)/255.,112./600.,order=5, multichannel=True)
+                print((io.imread(args.anchor_face)/255.).shape)
                 fdict2[image_input] = prep(anch_im)
                 fdict2[orig_emb] = sess.run(embedding,feed_dict=fdict2)
         elif args.anchor_emb!=None:
                 fdict2[orig_emb] = np.load(args.anchor_emb)[-1:]
         else:
-                anch_im = rescale(io.imread(args.image)/255.,112./600.,order=5, multichannel=True)
+                anch_im = rescale(io.imread(args.image)/255.,112./600.,order=5)
                 fdict2[image_input] = prep(anch_im)
                 fdict2[orig_emb] = sess.run(embedding,feed_dict=fdict2)
         
@@ -168,13 +169,11 @@ def main(args):
                 fdict,ims = gener.gen_random(im0,init_logo)
                 fdict2[image_input] = prep(ims)
                 grad_tmp = sess.run(grads2,feed_dict=fdict2)
-                
                 fdict_val, im_val = gener.gen_fixed(im0,init_logo)
                 fdict2[image_input] = prep(im_val)
                 ls.append(sess.run(cos_loss,feed_dict=fdict2)[0])
-                
                 # Gradients to the original sticker image
-                fdict[grads_input] = np.transpose(grad_tmp[0],[0,2,3,1])
+                fdict[grads_input] = grad_tmp[0]
                 grads_on_logo = np.mean(sess.run(grads1,feed_dict=fdict)[0],0)
                 grads_on_logo += sess.run(grads_tv,feed_dict=fdict)[0][0]
                 moments = moments*moment_val + grads_on_logo*(1.-moment_val)
@@ -204,7 +203,7 @@ def main(args):
 
         plt.plot(range(len(ls)),ls)
         plt.savefig(now+'_cosine.png')
-        io.imsave(now+'_advhat.png',init_logo)
+        io.imsave(now+'_advhat.png',(init_logo*255.).astype(np.uint8))
                    
 def parse_arguments(argv):
     parser = argparse.ArgumentParser()
